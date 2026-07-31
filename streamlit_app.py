@@ -56,22 +56,35 @@ transform = transforms.Compose([
 ])
 
 # ============================================
-# 4. Prediction Function
+# 4. Prediction Function (FIXED)
 # ============================================
 
 def predict_food(image):
     if model is None:
         return "Model not loaded", 0.0, []
     
-    if isinstance(image, str):
-        if image.startswith('http'):
-            response = requests.get(image)
-            img = Image.open(BytesIO(response.content)).convert('RGB')
-        else:
+    # Handle different input types
+    try:
+        # Case 1: File uploader object (has 'read' method)
+        if hasattr(image, 'read'):
             img = Image.open(image).convert('RGB')
-    else:
-        img = Image.fromarray(image).convert('RGB')
+        # Case 2: URL string
+        elif isinstance(image, str):
+            if image.startswith('http'):
+                response = requests.get(image)
+                img = Image.open(BytesIO(response.content)).convert('RGB')
+            else:
+                img = Image.open(image).convert('RGB')
+        # Case 3: NumPy array (from camera or array)
+        elif hasattr(image, '__array_interface__'):
+            img = Image.fromarray(image).convert('RGB')
+        else:
+            # Fallback: try to open as is
+            img = Image.open(image).convert('RGB')
+    except Exception as e:
+        return f"Error loading image: {str(e)}", 0.0, []
     
+    # Preprocess and predict
     img_tensor = transform(img).unsqueeze(0).to(device)
     
     with torch.no_grad():
@@ -140,9 +153,12 @@ with col3:
 
 # Process uploaded image
 if uploaded_file is not None:
+    # Display the image
     if isinstance(uploaded_file, str):
+        # URL example
         st.image(uploaded_file, caption='Example Image', use_column_width=True)
     else:
+        # Uploaded file
         image = Image.open(uploaded_file).convert('RGB')
         st.image(image, caption='Uploaded Image', use_column_width=True)
     
